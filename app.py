@@ -8,6 +8,18 @@ st.title("📞 LinkedIn → Phone & Email Finder")
 
 API_KEY = st.secrets["CONTACTOUT_API_KEY"]
 
+# -------- CREDIT TRACKING --------
+if "phone_credits" not in st.session_state:
+    st.session_state.phone_credits = 0
+
+if "email_credits" not in st.session_state:
+    st.session_state.email_credits = 0
+
+# -------- SIDEBAR --------
+st.sidebar.title("📊 Credit Usage")
+st.sidebar.write(f"📱 Phone Credits Used: {st.session_state.phone_credits}")
+st.sidebar.write(f"📧 Email Credits Used: {st.session_state.email_credits}")
+
 # -------- FUNCTION --------
 def fetch_contact(linkedin_url):
     url = "https://api.contactout.com/v1/people/linkedin"
@@ -32,10 +44,23 @@ def fetch_contact(linkedin_url):
         phones = profile.get("phone", [])
         emails = profile.get("email", [])
 
+        # ✅ Keep ALL phones
+        phone_list = phones
+
+        # ✅ Limit emails to MAX 2
+        email_list = emails[:2]
+
+        # ✅ Track credits
+        if phones:
+            st.session_state.phone_credits += len(phones)
+
+        if email_list:
+            st.session_state.email_credits += len(email_list)
+
         return {
             "linkedin_url": linkedin_url,
-            "phone": ", ".join(phones) if phones else "",
-            "emails": ", ".join(emails) if emails else ""
+            "phone": ", ".join(phone_list) if phone_list else "",
+            "emails": ", ".join(email_list) if email_list else ""
         }
 
     except:
