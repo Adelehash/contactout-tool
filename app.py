@@ -1,60 +1,76 @@
 import streamlit as st
 import requests
+import pandas as pd
 
-st.set_page_config(page_title="LinkedIn → Phone Finder", page_icon="📞")
+st.set_page_config(page_title="Bulk LinkedIn → Contact Finder", page_icon="📞")
 
-st.title("📞 LinkedIn URL → Phone Finder")
+st.title("📞 Bulk LinkedIn → Phone & Email Finder")
 
 API_KEY = st.secrets["CONTACTOUT_API_KEY"]
 
-linkedin_url = st.text_input("Enter LinkedIn Profile URL")
+uploaded_file = st.file_uploader("Upload CSV with LinkedIn URLs", type=["csv"])
 
-if st.button("Find Contact Info"):
+def fetch_contact(linkedin_url):
+    url = "https://api.contactout.com/v1/people/linkedin"
 
-    if not linkedin_url:
-        st.warning("Please enter a LinkedIn URL")
+    params = {
+        "profile": linkedin_url,
+        "include_phone": "true"
+    }
+
+    headers = {
+        "token": API_KEY,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    try:
+        res = requests.get(url, headers=headers, params=params)
+        data = res.json()
+
+        profile = data.get("profile", {})
+
+        phones = profile.get("phone", [])
+        emails = profile.get("email", [])
+
+        return {
+            "linkedin_url": linkedin_url,
+            "phone": ", ".join(phones) if phones else "",
+            "emails": ", ".join(emails) if emails else ""
+        }
+
+    except:
+        return {
+            "linkedin_url": linkedin_url,
+            "phone": "",
+            "emails": ""
+        }
+
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+
+    if "linkedin_url" not in df.columns:
+        st.error("CSV must contain 'linkedin_url' column")
     else:
-        with st.spinner("Fetching contact details..."):
+        results = []
 
-            url = "https://api.contactout.com/v1/people/linkedin"
+        if st.button("Start Processing"):
+            with st.spinner("Processing..."):
 
-            params = {
-                "profile": linkedin_url,
-                "include_phone": "true"
-            }
+                for i, row in df.iterrows():
+                    result = fetch_contact(row["linkedin_url"])
+                    results.append(result)
 
-            headers = {
-                "token": API_KEY,
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
+            result_df = pd.DataFrame(results)
 
-            try:
-                response = requests.get(url, headers=headers, params=params)
-                data = response.json()
+            st.success("Done 🎉")
+            st.dataframe(result_df)
 
-                profile = data.get("profile", {})
+            csv = result_df.to_csv(index=False).encode("utf-8")
 
-                phones = profile.get("phone", [])
-                emails = profile.get("email", [])
-
-                if phones:
-                    st.success("Phone Found 🎉")
-                    for p in phones:
-                        st.write(f"📱 {p}")
-                else:
-                    st.warning("No phone found")
-
-                if emails:
-                    st.success("Emails Found 📧")
-                    for e in emails:
-                        st.write(f"✉️ {e}")
-
-                if not phones and not emails:
-                    st.error("No contact info found")
-
-                with st.expander("Full Response"):
-                    st.json(data)
-
-            except Exception as e:
-                st.error(f"Error: {e}")
+            st.download_button(
+                label="Download Results CSV",
+                data=csv,
+                file_name="contact_results.csv",
+                mime="text/csv"
+            )
