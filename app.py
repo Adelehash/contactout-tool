@@ -2,14 +2,13 @@ import streamlit as st
 import requests
 import pandas as pd
 
-st.set_page_config(page_title="Bulk LinkedIn → Contact Finder", page_icon="📞")
+st.set_page_config(page_title="LinkedIn Contact Finder", page_icon="📞")
 
-st.title("📞 Bulk LinkedIn → Phone & Email Finder")
+st.title("📞 LinkedIn → Phone & Email Finder")
 
 API_KEY = st.secrets["CONTACTOUT_API_KEY"]
 
-uploaded_file = st.file_uploader("Upload CSV with LinkedIn URLs", type=["csv"])
-
+# -------- FUNCTION --------
 def fetch_contact(linkedin_url):
     url = "https://api.contactout.com/v1/people/linkedin"
 
@@ -46,31 +45,60 @@ def fetch_contact(linkedin_url):
             "emails": ""
         }
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+# -------- MODE SWITCH --------
+mode = st.radio("Select Mode", ["Single Lookup", "Bulk Upload"])
 
-    if "linkedin_url" not in df.columns:
-        st.error("CSV must contain 'linkedin_url' column")
-    else:
-        results = []
+# -------- SINGLE MODE --------
+if mode == "Single Lookup":
+    linkedin_url = st.text_input("Enter LinkedIn Profile URL")
 
-        if st.button("Start Processing"):
-            with st.spinner("Processing..."):
+    if st.button("Find Contact Info"):
+        if not linkedin_url:
+            st.warning("Please enter a LinkedIn URL")
+        else:
+            with st.spinner("Fetching..."):
+                result = fetch_contact(linkedin_url)
 
-                for i, row in df.iterrows():
-                    result = fetch_contact(row["linkedin_url"])
-                    results.append(result)
+                if result["phone"]:
+                    st.success("Phone Found 🎉")
+                    st.write(f"📱 {result['phone']}")
+                else:
+                    st.warning("No phone found")
 
-            result_df = pd.DataFrame(results)
+                if result["emails"]:
+                    st.success("Emails Found 📧")
+                    st.write(f"✉️ {result['emails']}")
 
-            st.success("Done 🎉")
-            st.dataframe(result_df)
+# -------- BULK MODE --------
+if mode == "Bulk Upload":
+    uploaded_file = st.file_uploader("Upload CSV with 'linkedin_url' column", type=["csv"])
 
-            csv = result_df.to_csv(index=False).encode("utf-8")
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
 
-            st.download_button(
-                label="Download Results CSV",
-                data=csv,
-                file_name="contact_results.csv",
-                mime="text/csv"
-            )
+        if "linkedin_url" not in df.columns:
+            st.error("CSV must contain 'linkedin_url' column")
+        else:
+            st.write(f"Total rows: {len(df)}")
+
+            if st.button("Start Bulk Processing"):
+                results = []
+
+                with st.spinner("Processing..."):
+                    for i, row in df.iterrows():
+                        result = fetch_contact(row["linkedin_url"])
+                        results.append(result)
+
+                result_df = pd.DataFrame(results)
+
+                st.success("Done 🎉")
+                st.dataframe(result_df)
+
+                csv = result_df.to_csv(index=False).encode("utf-8")
+
+                st.download_button(
+                    label="Download Results CSV",
+                    data=csv,
+                    file_name="contact_results.csv",
+                    mime="text/csv"
+                )
